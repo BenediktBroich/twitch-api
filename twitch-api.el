@@ -225,8 +225,9 @@ If LIMIT is an integer, pass that along to `twitch-api'."
 
 ;;;; Twitch Chat Interaction
 
+;;;###autoload
 (defun twitch-api-connect-to-server ()
-  "Invokes `erc' to open Twitch chat for a given CHANNEL-NAME."
+  "Invokes `erc' to connect to Twitch server."
   (interactive)
   (if (and twitch-api-username twitch-api-oauth-token)
 	    (erc :server "irc.chat.twitch.tv" :port 6667
