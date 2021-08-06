@@ -55,7 +55,7 @@ To retrieve an OAuth token, check out `http://twitchapps.com/tmi/'."
 (defcustom twitch-api-client-id "d6hul5ut8dmqvl6tsa90254yzu8g612"
   "The Client ID for the application.
 
-If you want to use your own, you can register for for one at
+If you want to use your own, you can register for for one at 
 `https://github.com/justintv/Twitch-API'."
   :group 'helm-twitch
   :type 'string)
@@ -223,28 +223,27 @@ If LIMIT is an integer, pass that along to `twitch-api'."
 		:game    (plist-get channel ':game)
 		:url     (plist-get channel ':url))))))
 
-;;;; Twitch Chat Interaction
 
-;;;###autoload
-(defun twitch-api-connect-to-server ()
-  "Invokes `erc' to connect to Twitch server."
+;;;; Twitch Chat Interaction
+(defun twitch-api-erc-tls ()
+  "Invokes `erc' to open Twitch chat for a given CHANNEL-NAME."
   (interactive)
   (if (and twitch-api-username twitch-api-oauth-token)
-	    (erc :server "irc.chat.twitch.tv" :port 6667
-	         :password (format "oauth:%s" twitch-api-oauth-token)
-	         :nick (downcase twitch-api-username))
+      (erc-tls :server "irc.chat.twitch.tv" :port 6697
+	             :nick (downcase twitch-api-username)
+	             :password (format "oauth:%s" twitch-api-oauth-token))
     (when (not twitch-api-username)
       (message "Set the variable `twitch-api-username' to connect to Twitch chat."))
     (when (not twitch-api-oauth-token)
-      (message "Set the variable `twitch-api-oauth-token' to connect to Twitch chat."))))
-
+      (message "Set the variable `twitch-api-oauth-token' to connect to Twitch chat."))
+    ))
 
 ;;;###autoload
-(defun twitch-api-open-chat (channel-name)
+(defun twitch-api-erc-join-channel (channel-name)
   "Invokes `erc' to open Twitch chat for a given CHANNEL-NAME."
   (interactive "sChannel: ")
   (if (and twitch-api-username twitch-api-oauth-token)
-	    (erc-join-channel (format "#%s" (downcase channel-name)))
+      (erc-join-channel (format "#%s" (downcase channel-name)))
     (when (not twitch-api-username)
       (message "Set the variable `twitch-api-username' to connect to Twitch chat."))
     (when (not twitch-api-oauth-token)
