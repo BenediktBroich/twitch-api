@@ -5,7 +5,7 @@
 ;; Version: 0.1
 ;; Keywords: multimedia, twitch-api
 ;; URL: https://github.com/BenediktBroich/twitch-api
-;; Package-Requires: ((emacs "27.1") (dash "2.19.0") (json "1.4") (tabulated-list "1.0"))
+;; Package-Requires: ((emacs "27.1") (dash "2.19.0"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -263,7 +263,7 @@ If LIMIT is an integer, pass that along to `twitch-api'."
         [("Streamer" 17 t) ("Viewers" 7 twitch-api--sort-by-viewers)
          ("Game" 20 t) ("Status" 0 nil)])
   (setq tabulated-list-sort-key (cons "Viewers" nil))
-  (add-hook 'tabulated-list-revert-hook
+  (add-hook #'tabulated-list-revert-hook
             'twitch-api--refresh-top-streams nil t))
 
 (defun twitch-api--refresh-top-streams ()
