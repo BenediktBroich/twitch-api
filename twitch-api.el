@@ -1,6 +1,10 @@
 ;;; twitch-api.el --- An elisp interface for the Twitch.tv API
 
 ;; Copyright (C) 2015-2016 Aaron Jacobs
+;; Version: 0.1
+;; Keywords: multimedia, twitch-api
+;; URL: https://github.com/BenediktBroich/twitch-api
+;; Package-Requires: ((emacs "24.3"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -19,6 +23,10 @@
 ;; the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 ;; Boston, MA 02110-1301, USA.
 
+
+;;; Commentary:
+;; This are twitch api funtions mainly used by helm-twitch.
+
 ;;; Code:
 
 (require 'url)
@@ -32,6 +40,7 @@
 
 (defcustom twitch-api-game-filter nil
   "If specified, limits the search to those streaming this game."
+  :group 'helm-twitch
   :version 0.1
   :type 'string)
 
@@ -55,7 +64,7 @@ To retrieve an OAuth token, check out `http://twitchapps.com/tmi/'."
 (defcustom twitch-api-client-id "d6hul5ut8dmqvl6tsa90254yzu8g612"
   "The Client ID for the application.
 
-If you want to use your own, you can register for for one at 
+If you want to use your own, you can register for for one at
 `https://github.com/justintv/Twitch-API'."
   :group 'helm-twitch
   :type 'string)
@@ -89,8 +98,7 @@ If you want to use your own, you can register for for one at
 ;;;; Authentication
 
 (defun twitch-api-authenticate ()
-  "Retrieve an OAuth token for a Twitch.tv account through a
-browser."
+  "Retrieve an OAuth token for a Twitch.tv account through a browser."
   (interactive)
   (cl-assert twitch-api-client-id)
   (browse-url
@@ -100,23 +108,23 @@ browser."
 	   "&scope=user_read+user_follows_edit+chat_login"))
   (let ((token (read-string "OAuth Token: ")))
     (if (equal token "")
-	(user-error "No token supplied. Aborting.")
+	(user-error "No token supplied. Aborting.? ")
       (setq twitch-api-oauth-token token))))
 
 ;;;; API Wrappers
 
 ;;;###autoload
 (defun twitch-api (endpoint auth &rest plist)
-  "Query the Twitch API at ENDPOINT, returning the resulting JSON
-in a property list structure. When AUTH is non-nil, include the
-OAuth token in `twitch-api-oauth-token' in the request (if it
+  "Query the Twitch API at ENDPOINT.
+Returns the resulting JSON in a property list structure.
+When AUTH is non-nil, include the OAuth token in
+`twitch-api-oauth-token' in the request (if it
 exists).
 
 Twitch API parameters can be passed in the property list PLIST.
 For example:
 
-    (twitch-api \"search/channels\" t :query \"flame\" :limit 15)
-"
+    (twitch-api \"search/channels\" t :query \"flame\" :limit 15)"
   (let* ((params (twitch-api--plist-to-url-params plist))
          (api-url (concat "https://api.twitch.tv/kraken/" endpoint "?" params))
          (curl-opts (list "--compressed" "--silent" "--location" "-D-"))
@@ -148,8 +156,7 @@ For example:
       (goto-char (point-min))
       ;; Mimic url.el and store the status as a local variable.
       (re-search-forward "^HTTP/[\\.0-9]+ \\([0-9]+\\)")
-      (setq-local url-http-response-status (string-to-number (match-string 1)))
-      (unless (equal url-http-response-status 204)
+      (unless (equal (string-to-number (match-string 1)) 204)
         (re-search-forward "^\r\n") ;; End of headers.
         ;; Many Twitch streams have non-ASCII statuses in UTF-8 encoding.
         (decode-coding-region (point) (point-max) 'utf-8)
@@ -205,7 +212,6 @@ If LIMIT is an integer, pass that along to `twitch-api'."
 ;;;###autoload
 (defun twitch-api-get-followed-streams (&optional limit)
   "Retrieve a list of Twitch streams that match the SEARCH-TERM.
-
 If LIMIT is an integer, pass that along to `twitch-api'."
   (cl-assert twitch-api-oauth-token)
   (let* ((opts (if (integerp limit) '(:limit limit)))
@@ -235,8 +241,7 @@ If LIMIT is an integer, pass that along to `twitch-api'."
     (when (not twitch-api-username)
       (message "Set the variable `twitch-api-username' to connect to Twitch chat."))
     (when (not twitch-api-oauth-token)
-      (message "Set the variable `twitch-api-oauth-token' to connect to Twitch chat."))
-    ))
+      (message "Set the variable `twitch-api-oauth-token' to connect to Twitch chat."))))
 
 ;;;###autoload
 (defun twitch-api-erc-join-channel (channel-name)
@@ -261,6 +266,7 @@ If LIMIT is an integer, pass that along to `twitch-api'."
             'twitch-api--refresh-top-streams nil t))
 
 (defun twitch-api--refresh-top-streams ()
+  "Recive a list of top streams from twitch."
   (setq tabulated-list-entries
         (mapcar (lambda (elt)
                   (list elt (vector (twitch-api-stream-name elt)
@@ -271,6 +277,7 @@ If LIMIT is an integer, pass that along to `twitch-api'."
                 (twitch-api-search-streams ""))))
 
 (defun twitch-api--sort-by-viewers (s1 s2)
+  "Sort streams by viewers. (> S1 S2)."
   (> (twitch-api-stream-viewers (car s1))
      (twitch-api-stream-viewers (car s2))))
 
