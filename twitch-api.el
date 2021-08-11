@@ -5,7 +5,7 @@
 ;; Version: 0.1
 ;; Keywords: multimedia, twitch-api
 ;; URL: https://github.com/BenediktBroich/twitch-api
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "27.1") (dash 2.19.0) (json 1.4) (tabulated-list 1.0))
 
 ;; This file is NOT part of GNU Emacs.
 
