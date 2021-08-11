@@ -1,10 +1,11 @@
 ;;; twitch-api.el --- An elisp interface for the Twitch.tv API
 
 ;; Copyright (C) 2015-2016 Aaron Jacobs
+;; Copyright (C) 2020-2021 Benedikt Broich
 ;; Version: 0.1
 ;; Keywords: multimedia, twitch-api
 ;; URL: https://github.com/BenediktBroich/twitch-api
-;; Package-Requires: ((emacs "24.3"))
+;; Package-Requires: ((emacs "27.1"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -262,7 +263,7 @@ If LIMIT is an integer, pass that along to `twitch-api'."
         [("Streamer" 17 t) ("Viewers" 7 twitch-api--sort-by-viewers)
          ("Game" 20 t) ("Status" 0 nil)])
   (setq tabulated-list-sort-key (cons "Viewers" nil))
-  (add-hook 'tabulated-list-revert-hook
+  (add-hook #'tabulated-list-revert-hook
             'twitch-api--refresh-top-streams nil t))
 
 (defun twitch-api--refresh-top-streams ()
