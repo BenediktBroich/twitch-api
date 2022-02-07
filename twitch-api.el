@@ -26,7 +26,7 @@
 
 
 ;;; Commentary:
-;; This are twitch api funtions mainly used by helm-twitch.
+;; These are twitch API functions mainly used by helm-twitch.
 
 ;;; Code:
 
@@ -267,7 +267,7 @@ If LIMIT is an integer, pass that along to `twitch-api'."
             'twitch-api--refresh-top-streams nil t))
 
 (defun twitch-api--refresh-top-streams ()
-  "Recive a list of top streams from twitch."
+  "Receive a list of top streams from twitch."
   (setq tabulated-list-entries
         (mapcar (lambda (elt)
                   (list elt (vector (twitch-api-stream-name elt)
