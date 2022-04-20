@@ -62,10 +62,18 @@ To retrieve an OAuth token, check out `http://twitchapps.com/tmi/'."
   :group 'helm-twitch
   :type 'string)
 
-(defcustom twitch-api-client-id "d6hul5ut8dmqvl6tsa90254yzu8g612"
+(defcustom twitch-api-client-id "fvnc4hhky45iywd0o5q0aiy71ncbii"
   "The Client ID for the application.
 
-If you want to use your own, you can register for for one at
+If you want to use your own, you can register one at
+`https://github.com/justintv/Twitch-API'."
+  :group 'helm-twitch
+  :type 'string)
+
+(defcustom twitch-api-client-secret "fvnc4hhky45iywd0o5q0aiy71ncbii"
+  "The Client secret for the application.
+
+If you want to use your own, you can register one at
 `https://github.com/justintv/Twitch-API'."
   :group 'helm-twitch
   :type 'string)
@@ -76,7 +84,6 @@ If you want to use your own, you can register for for one at
   :type 'string)
 
 ;;;; Utilities
-
 (defun twitch-api--plist-to-url-params (plist)
   "Turn property list PLIST into an HTML parameter string."
   (mapconcat (lambda (entry)
@@ -87,14 +94,22 @@ If you want to use your own, you can register for for one at
 	     (-partition 2 plist) "&"))
 
 ;;;; Data Structures
+(cl-defstruct (twitch-api-user-info (:constructor twitch-api-user-info--create))
+  "A Twitch.tv channel."
+  client_id login scopes user_id expires_in)
+
+(defcustom twitch-api-current-user-info nil
+  "Token Validation information for the user."
+  :group 'helm-twitch
+  :type 'twitch-api-user-info)
 
 (cl-defstruct (twitch-api-stream (:constructor twitch-api-stream--create))
   "A Twitch.tv stream."
-  name viewers status game url)
+  user_id name viewers status game url)
 
 (cl-defstruct (twitch-api-channel (:constructor twitch-api-channel--create))
   "A Twitch.tv channel."
-  name followers game url)
+  user_id name followers game url status)
 
 ;;;; Authentication
 
@@ -102,15 +117,42 @@ If you want to use your own, you can register for for one at
   "Retrieve an OAuth token for a Twitch.tv account through a browser."
   (interactive)
   (cl-assert twitch-api-client-id)
+  (setq twitch-api-oauth-token nil)
   (browse-url
-   (concat "https://api.twitch.tv/kraken/oauth2/authorize?response_type=token"
-	   "&client_id=" twitch-api-client-id
-	   "&redirect_uri=http://localhost"
-	   "&scope=user_read+user_follows_edit+chat_login"))
+   (concat "https://id.twitch.tv/oauth2/authorize" "?"
+	         "client_id=" twitch-api-client-id
+           "&redirect_uri=http://localhost"
+           "&response_type=token"
+	         "&scope=openid"
+           "+user:read:follows"
+           "+user:read:subscriptions"
+           "+chat:edit"
+           "+chat:read"
+           "+whispers:read"
+           "+whispers:edit"))
   (let ((token (read-string "OAuth Token: ")))
     (if (equal token "")
 	(user-error "No token supplied. Aborting.? ")
       (setq twitch-api-oauth-token token))))
+
+;;;; Validation
+
+;;;###autoload
+(defun twitch-api-validate ()
+  "Validates the Bearer token for a Twitch.tv account."
+  (interactive)
+  (let* ((results (eval `,@(append '(twitch-api "id.twitch.tv/oauth2/validate" t)
+                                   nil))))
+	  (setq twitch-api-current-user-info (twitch-api-user-info--create
+	                              :client_id      (plist-get results ':client_id)
+	                              :login          (plist-get results ':login)
+	                              :scopes         (plist-get results ':scopes)
+	                              :user_id        (plist-get results ':user_id)
+	                              :expires_in     (plist-get results ':expires_in)))))
+
+(defun twitch-api-get-url (name)
+  "Create twitch url using the streamer NAME."
+  (concat "https://twitch.tv/" name))
 
 ;;;; API Wrappers
 
@@ -127,7 +169,7 @@ For example:
 
     (twitch-api \"search/channels\" t :query \"flame\" :limit 15)"
   (let* ((params (twitch-api--plist-to-url-params plist))
-         (api-url (concat "https://api.twitch.tv/kraken/" endpoint "?" params))
+         (api-url (concat "https://" endpoint "?" params))
          (curl-opts (list "--compressed" "--silent" "--location" "-D-"))
          (json-object-type 'plist) ;; Decode into a plist.
          (headers
@@ -139,9 +181,9 @@ For example:
     ;; Support setting the method lexically, as with url.el.
     (when url-request-method
       (push (format "-X%s" url-request-method) curl-opts))
-	  ;; Add the Authorization ID (if present).
+      ;;; Add the Authorization ID (if present).
     (when (and auth twitch-api-oauth-token)
-      (push `("Authorization" . ,(format "OAuth %s" twitch-api-oauth-token))
+      (push `("Authorization" . ,(format "Bearer %s" twitch-api-oauth-token))
             headers))
 	  ;; Add the Client ID (if present).
 	  (when twitch-api-client-id
@@ -177,23 +219,22 @@ For example:
   "Retrieve a list of Twitch streams that match the SEARCH-TERM.
 
 If LIMIT is an integer, pass that along to `twitch-api'."
-  (let* ((opts (if (integerp limit) '(:limit limit)))
-	 (opts (if twitch-api-game-filter
-		   (append '(:game twitch-api-game-filter) opts)
-		 opts))
-	 (opts (append `(:query ,search-term) opts))
+  (interactive)
+  (let* ((opts (if (integerp limit) '(:first limit)))
+	       (opts (append `(:query ,search-term) opts))
 	 ;; That was really just a way of building up a plist of options to
 	 ;; pass to `twitch-api'...
-	 (results (eval `,@(append '(twitch-api "streams" nil) opts))))
-    (cl-loop for stream across (plist-get results ':streams) collect
-	     (let ((channel (plist-get stream ':channel)))
-	       (twitch-api-stream--create
-		:name    (plist-get channel ':name)
-		:viewers (plist-get stream ':viewers)
-		:status  (replace-regexp-in-string "[
-]" "" (plist-get channel ':status))
-		:game    (plist-get channel ':game)
-		:url     (plist-get channel ':url))))))
+	 (results (eval `,@(append '(twitch-api "api.twitch.tv/helix/streams" t)
+                             opts))))
+    (cl-loop for stream across (plist-get results ':data) collect
+             (twitch-api-stream--create
+		          :user_id (plist-get stream ':user_id)
+		          :name    (plist-get stream ':user_name)
+		          :viewers (plist-get stream ':viewer_count)
+		          :status  (replace-regexp-in-string "[
+]" "" (plist-get stream ':type))
+		          :game    (plist-get stream ':game_name)
+              :url (twitch-api-get-url (plist-get stream ':user_name))))))
 
 ;;;###autoload
 (defun twitch-api-search-channels (search-term &optional limit)
@@ -202,34 +243,38 @@ If LIMIT is an integer, pass that along to `twitch-api'."
 If LIMIT is an integer, pass that along to `twitch-api'."
   (let* ((opts (if (integerp limit) '(:limit limit)))
 	 (opts (append `(:query ,search-term) opts))
-	 (results (eval `,@(append '(twitch-api "search/channels" nil) opts))))
-    (cl-loop for channel across (plist-get results ':channels) collect
+	 (results
+    (eval `,@(append
+              '(twitch-api "api.twitch.tv/helix/search/channels" t)
+                             opts))))
+    (cl-loop for channel across (plist-get results ':data) collect
 	     (twitch-api-channel--create
-	      :name      (plist-get channel ':name)
-	      :followers (plist-get channel ':followers)
-	      :game      (plist-get channel ':game)
-	      :url       (plist-get channel ':url)))))
+              :user_id (plist-get channel ':user_id)
+	      :name (plist-get channel ':display_name)
+              :status (plist-get channel ':is_live)
+              :game (plist-get channel ':game_name)))))
 
-;;;###autoload
 (defun twitch-api-get-followed-streams (&optional limit)
   "Retrieve a list of Twitch streams that match the SEARCH-TERM.
 If LIMIT is an integer, pass that along to `twitch-api'."
   (cl-assert twitch-api-oauth-token)
-  (let* ((opts (if (integerp limit) '(:limit limit)))
-	 (results (eval `,@(append
-			    '(twitch-api "streams/followed" t
-					 :stream_type "live")
-			    opts))))
-    (cl-loop for stream across (plist-get results ':streams) collect
-	     (let ((channel (plist-get stream ':channel)))
-	       (twitch-api-stream--create
-		:name    (plist-get channel ':name)
-		:viewers (plist-get stream ':viewers)
-		:status  (replace-regexp-in-string "[
-]" "" (plist-get channel ':status))
-		:game    (plist-get channel ':game)
-		:url     (plist-get channel ':url))))))
-
+  (twitch-api-validate)
+  (let* ((user-id (twitch-api-user-info-user_id twitch-api-current-user-info))
+         (opts (if (integerp limit) '(:limit limit)))
+	       (results
+                (eval `,@(append
+                          #'(twitch-api "api.twitch.tv/helix/streams/followed" t
+                                        :user_id user-id)
+                          opts))))
+    (cl-loop for stream across (plist-get results ':data) collect
+             (twitch-api-stream--create
+		          :user_id (plist-get stream ':user_id)
+		          :name    (plist-get stream ':user_name)
+		          :viewers (plist-get stream ':viewer_count)
+		          :status  (replace-regexp-in-string "[
+]" "" (plist-get stream ':type))
+		          :game    (plist-get stream ':game_name)
+              :url (twitch-api-get-url (plist-get stream ':user_name))))))
 
 ;;;; Twitch Chat Interaction
 (defun twitch-api-erc-tls ()
@@ -245,11 +290,12 @@ If LIMIT is an integer, pass that along to `twitch-api'."
       (message "Set the variable `twitch-api-oauth-token' to connect to Twitch chat."))))
 
 ;;;###autoload
-(defun twitch-api-erc-join-channel (channel-name)
-  "Invokes `erc' to open Twitch chat for a given CHANNEL-NAME."
+(defun twitch-api-erc-join-channel (stream)
+  "Invokes `erc' to open Twitch chat for a given CHANNEL-NAME.
+Argument STREAM Channel name to join."
   (interactive "sChannel: ")
   (if (and twitch-api-username twitch-api-oauth-token)
-      (erc-join-channel (format "#%s" (downcase channel-name)))
+      (erc-join-channel (twitch-api-stream-name stream))
     (when (not twitch-api-username)
       (message "Set the variable `twitch-api-username' to connect to Twitch chat."))
     (when (not twitch-api-oauth-token)
@@ -282,7 +328,6 @@ If LIMIT is an integer, pass that along to `twitch-api'."
   (> (twitch-api-stream-viewers (car s1))
      (twitch-api-stream-viewers (car s2))))
 
-;;;###autoload
 (defun twitch-api-list-top-streams ()
   "Display a list of top streams on Twitch.tv."
   (interactive)
